@@ -1,0 +1,16 @@
+build/
+isodir/
+*.elf
+*.iso
+*.d
+disk.img
+ahci_test.img
+qemu.log
+debugcon.log
+__changes/
+src/*.c.idle
+cscope.out
+*.old
+*.zip
+*.txt
+exps/

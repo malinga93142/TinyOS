@@ -1,0 +1,13 @@
+---
+title: "Building an x86-64 Bare-Metal Kernel"
+subtitle: "SMP Support, Paging Isolation, and Low-Level Architecture"
+author: "Kernel Developer"
+# date: "\\today"
+lang: "en-US"
+documentclass: "report"
+papersize: "a4"
+toc: true
+toc-depth: 2
+numbersections: true
+colorlinks: true
+---

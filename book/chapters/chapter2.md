@@ -1,0 +1,158 @@
+# Real Mode
+## x86 Real Mode
+This is the legacy 16-bit operating mode that every modern x86 processor starts
+up in (backwards compatibility with the original 8086 chip). In this mode, the
+CPU has direct, unrestricted access to system memory and hardware, with no
+memory protection or virtual memory.
+
+## Segmentation
+Because real mode uses 16-bit registers but needs to address more than 64 KB of
+memory, it uses a segment-plus-offset scheme. It combines a segment register
+(shifted left by 4 bits or simply multiplied by 16) with an offset address to
+form a 20-bit physical address, allowing access up to 1MB of memory.
+
+### The Concept of Segmentation
+Conceptually, segmentation is a way of dividing up memory into smaller,
+manageable chunks (called segments) rather treating entire memory space as one
+massive, continuous line.
+In x86 real mode, the CPU does not just look at memory as a single flat address
+space. Instead, it looks through a "window". That window is defined by two
+pieces working together:
+
+- **The Segment**: Points to the starting paragraph or block of memory.
+- **The Offset** : Points to the exact by inside that block.
+
+The specific way x86 real mode segmentation works (`Segment * 16 + Offset`) comes down to a hardware design limitation from the early days of microprocessors:
+
+1. **The 16-Bit Hardware Constraint:** The original x86 chips were built using 16-bit architecture. This meant the internal registers could naturally hold values up to 64 KB.
+2. **The Need for More Memory:** Engineers wanted the computer to access 1 MB of physical memory, which requires a 20-bit address ($2^{20} = 1,048,576$ bytes).
+3. **The Engineering Compromise:** Instead of completely redesigning the chip to use native 20-bit registers (which was impractical and expensive at the time), they found a clever workaround using two 16-bit values.
+
+By taking a 16-bit segment value and shifting it left by 4 bits (which is the same as multiplying by 16, or adding a single hex digit), they turned it into a 20-bit base address. Then, adding a 16-bit offset allowed the CPU to slide that 64KB window anywhere across the 1MB space.
+
+In short, it was a practical hardware hack to squeeze a 20-bit address range out of 16-bit components.
+
+
+Below table shows **Implicit Segment Register Usage in x86 Real Mode**.
+
+| Operation Type | Default Segment Register | Description / Typical Usage |
+| --- | --- | --- |
+| **Instruction Fetch** | `CS` (Code Segment) | Points to the segment containing the executable machine code instructions (`IP` offset). |
+| **Stack Operations** (`PUSH`, `POP`, `CALL`, `RET`) | `SS` (Stack Segment) | Points to the stack area in memory (`SP` offset). |
+| **General Data Access** (default) | `DS` (Data Segment) | Used for most general-purpose variable reads and writes (`BX`, `SI`, `DI`, or direct offsets). |
+| **String Operations** (Source) | `DS` (Data Segment) | Used as the source segment for string manipulation instructions (paired with `SI`). |
+| **String Operations** (Destination) | `ES` (Extra Segment) | Strictly required as the destination segment for string instructions like `MOVS` (paired with `DI`). |
+## Memory Operations
+This covers how instructions actually read from and write to that physical
+memory using pointers, offsets, and registers (like DS, CS, SS, ES).
+
+```gas
+.intel_syntax noprefix
+.code16
+
+_start:
+	# 1. set up the stack segment (SS) and stack pointer (SP)
+	# whenever PUSH or POP instruction, the CPU automatically
+	# uses the stack segment (SS) combined with stack pointer(SP)
+	# to find the target memory address.
+	# SS:SP --> linear address = SS << 4 + SP
+	# for example,
+	# mov ax, 0x0000
+	# mov ss, ax
+	# mov sp, 0x7C00
+	# PUSH 0x20
+	# the value 0x20 will be in memory address of 0x0000:0x7C00
+	# 0x0000 << 4 + 0x7C00 = 0x7C00
+	# PUSH 0x20 does SP = SP - 2 (since it's 16-bit real mode)
+	# Therefore, SP becomes 0x7BFE
+	# the exact logic applies for the POP instruction, just with
+	# the inverse stack pointer arithmetic.
+	# POP ax --> loads the value from SS:[SP] (or [SS:SP]) into ax
+	# and increments the pointer: SP = SP + 2
+	mov ax, 0x0000
+	mov ss, ax
+	mov sp, 0x7c00
+
+	# 2. set up the data segment (DS) for general variables
+	mov ax, 0x07c0
+	mov ds, ax
+
+	# 3. set up the extra segment (ES)
+	mov ax, 0xb800
+	mov es, ax
+
+	# 4. code segment (CS)
+	# CS is set automatically by the loader/BIOS, but can be targeted
+	# with a far jump if you need to change execution segments
+	# jmp 0x07c0:load_data
+
+load_data:
+	# using DS implicitly for reading a variable
+	mov al, [my_variable]
+
+	# using ES explicitly with a segment override to write to video memory
+	mov byte [es:0x0000], al
+	cli # clear interrupts
+	hlt # halt
+
+my_variable db 'A'
+```
+
+## Port I/O and Memory-Mapped I/O
+In x86 real mode, the processor communicates with hardware and peripherals
+through two distinct channels.
+
+- **Memory-Mapped I/O**: Hardware components share the same 1MB RAM space.
+                         For instance, graphics memory lives right alongside
+                         regular variables, allowing the processor to interact
+                         with device simply by using standard data-movement
+                         instructions like `MOV`.
+- **Port I/O** : Devices can also reside on an entirely isolated 64KB address
+                 space. Because regular memory instructions won't work here,
+                 the CPU relies on specialized commands -- specifically `IN`
+                 to pull data from a hardware port into a register, and `OUT`
+                 to push data from a register out to a device.
+
+## Interrupts
+An interrupt is essential an alarm or signal sent to the CPU, telling it to
+pause whatever it is currently doing to handle an urgent event or request.
+
+An interrupt service (often called interrupt service routine or ISR) is the
+specific block of code designed to handle that event. Once the routine
+finishes its job, the CPU picks up right where it left off.
+
+For example, when you press a key on your keyboard, it fires an interrupt
+, and the CPU runs a quick keyboard service routine to read the keystroke
+before returning to your main program.
+
+### Interrupts in Real Mode
+In real mode, interrupt handling is simple and direct:
+
+- **The Interrupt Vector Table (IVT)**: Real mode uses a table located at the very
+bottom of memory (start at address 0x0000). This table contains a list of 256
+pointers (segment and offset addresses) pointing to different interrupt handlers.
+
+- **How it works**: When an interrupt occurs (or when code run an instruction like
+`INT 0x10`), the CPU looks up the matching number in the IVT, jumps to that
+CS:IP address, runs the routine, and returns.
+
+- **BIOS/DOS Integration**: Real mode heavily relies on these software interrupts
+built-in BIOS services to read disks, write to the screen, or check the
+keyboard.
+
+### Interrupts in Protected Mode
+
+Protected mode introduces security, multitasking, and stability, which changes
+how interrupts work:
+
+- **The Interrupt Descriptor Table**: Instead of a simple pointer table like the
+																	IVT, protected mode uses the IDT.
+
+- **Descriptor Structures**: Each entry in the IDT is a complex descriptor rather
+                         than a raw address. It includes a segment selector,
+                         an offset, access rights, and a descriptor privilege
+                         level (DPL).
+
+- **Privilege Checks**: Protected mode ensures that user programs (running in ring
+                    3) cannot maliciously trigger or hijack system interrupts
+                    meant only for the kernel (running in ring 0).

@@ -1,0 +1,371 @@
+% \usepackage[margin=2.2cm]{geometry}
+% \usepackage[T1]{fontenc}
+% \usepackage{lmodern}
+% \usepackage{xcolor}
+% \usepackage{listings}
+% \usepackage[colorlinks=true,linkcolor=blue!50!black]{hyperref}
+% 
+\definecolor{cmt}{HTML}{5A7A5A}
+\definecolor{kw}{HTML}{1F4E9C}
+\definecolor{bg}{HTML}{F6F6F6}
+
+\lstdefinestyle{base}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{bg},
+  commentstyle=\color{cmt}\itshape,
+  keywordstyle=\color{kw}\bfseries,
+  frame=single, rulecolor=\color{black!20},
+  breaklines=true, columns=fullflexible,
+  showstringspaces=false, tabsize=4,
+  xleftmargin=4pt, xrightmargin=4pt,
+  aboveskip=8pt, belowskip=8pt
+}
+\lstdefinelanguage{gas}{
+  morekeywords={pushq,popq,movq,ret,call,jmp,ud2,sti,hlt,iretq,cli},
+  morekeywords=[2]{.text,.globl,.code64},
+  sensitive=false, morecomment=[l]{\#}
+}
+\lstdefinestyle{cstyle}{style=base,language=C,
+  morekeywords={uint64_t,uint32_t,size_t,_Static_assert,offsetof}}
+\lstdefinestyle{asmstyle}{style=base,language=gas}
+\newcommand{\code}[1]{\texttt{#1}}
+
+%-------------------------------------------------------------
+\section{Overview}
+The design follows the xv6 model. The switch saves only
+\emph{callee-saved} registers on the old task's kernel stack, because the
+C caller already treats every other register as clobbered across the call.
+The saved stack pointer lives in the task structure.
+
+\begin{itemize}
+  \item \code{struct context}: the stack image produced by the pushes.
+  \item \code{struct task}: kernel stack, CR3, state, and two list nodes.
+  \item \code{switch\_context}: assembly stack swap.
+  \item Intrusive lists: run queue, wait queues, and all-tasks list.
+\end{itemize}
+
+%-------------------------------------------------------------
+\section{Intrusive Lists}
+The link node is embedded in the object, so enqueueing never allocates.
+This matters in scheduler and interrupt context. A self-linked node means
+``on no list''.
+
+\begin{lstlisting}[style=cstyle]
+#include <stddef.h>
+#include <stdint.h>
+
+struct list_node { struct list_node *prev, *next; };
+
+static inline void list_init(struct list_node *h)
+{ h->prev = h->next = h; }
+
+static inline int list_empty(const struct list_node *h)
+{ return h->next == h; }
+
+static inline void list_add_tail(struct list_node *n, struct list_node *h)
+{
+    n->prev = h->prev; n->next = h;
+    h->prev->next = n; h->prev = n;
+}
+
+static inline void list_del(struct list_node *n)
+{
+    n->prev->next = n->next;
+    n->next->prev = n->prev;
+    n->prev = n->next = n; /* self-linked = not on any list */
+}
+
+#define container_of(p, T, m) \
+    ((T *)((char *)(p) - offsetof(T, m)))
+\end{lstlisting}
+
+%-------------------------------------------------------------
+\section{Context and Task Structures}
+\subsection{Context}
+The layout must match the push order in \code{switch.S}. Lowest address
+first, so this is exactly the stack image after the pushes. The \code{rip}
+field is the return address consumed by \code{ret}.
+
+\begin{lstlisting}[style=cstyle]
+struct context {
+    uint64_t r15, r14, r13, r12, rbx, rbp;
+    uint64_t rip;
+};
+
+_Static_assert(sizeof(struct context) == 7 * 8, "context layout");
+\end{lstlisting}
+
+\subsection{Task}
+\code{link} is used by the run queue \emph{or} one wait queue, never both.
+\code{all\_link} stays linked for the task's whole lifetime.
+
+\begin{lstlisting}[style=cstyle]
+enum { TASK_RUNNING, TASK_BLOCKED, TASK_ZOMBIE };
+
+struct task {
+    struct context *ctx; /* saved kernel RSP; MUST be offset 0 */
+    uint64_t kstack_top; /* for TSS.rsp0 */
+    uint64_t cr3; /* physical address of PML4 */
+    int pid;
+    int state;
+    struct list_node link; /* runq OR a wait queue */
+    struct list_node all_link; /* all-tasks list */
+};
+
+_Static_assert(offsetof(struct task, ctx) == 0, "ctx must be first");
+\end{lstlisting}
+
+%-------------------------------------------------------------
+\section{Context Switch in Assembly}
+Arguments: \code{rdi} = \code{struct context **old},
+\code{rsi} = \code{struct context *new}. Usage:
+\code{switch\_context(\&prev->ctx, next->ctx);}
+
+\begin{lstlisting}[style=asmstyle]
+    .text
+    .globl switch_context
+switch_context:
+    pushq %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+    movq %rsp, (%rdi) # *old = current stack pointer
+    movq %rsi, %rsp # switch stacks
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+    popq %rbp
+    ret # pops ctx->rip: resumes the new task
+\end{lstlisting}
+
+\paragraph{Why it works.} \code{call} already pushed the return address,
+so the six pushes complete a \code{struct context} with \code{rip} on top.
+For a task that has run before, \code{ret} returns to where it called
+\code{switch\_context}. For a new task, it returns into the trampoline.
+
+%-------------------------------------------------------------
+\section{Task Creation and Trampoline}
+\code{switch\_context} restores only callee-saved registers, and
+\code{rdi} is not one of them. So \code{entry} and \code{arg} are stashed
+in \code{r12} and \code{r13} of the initial context, and the trampoline
+moves them into place. \code{r12} and \code{r13} survive
+\code{call task\_first\_run} because they are callee-saved.
+
+\begin{lstlisting}[style=asmstyle]
+    .globl task_trampoline
+task_trampoline:
+    call task_first_run # C: release sched lock, enable interrupts
+    movq %r13, %rdi # arg
+    call *%r12 # entry(arg)
+    call task_exit # never returns
+    ud2
+\end{lstlisting}
+
+\begin{lstlisting}[style=cstyle]
+extern void task_trampoline(void);
+
+void task_init(struct task *t, void *kstack_base, uint64_t size,
+               void (*entry)(void *), void *arg)
+{
+    uint64_t top = ((uint64_t)kstack_base + size) & ~0xFULL;
+    t->kstack_top = top;
+
+    struct context *c = (struct context *)(top - sizeof(*c));
+    *c = (struct context){0};
+    c->r12 = (uint64_t)entry;
+    c->r13 = (uint64_t)arg;
+    c->rip = (uint64_t)task_trampoline;
+    t->ctx = c;
+
+    list_init(&t->link);
+    list_init(&t->all_link);
+}
+\end{lstlisting}
+
+\paragraph{Alignment.} The context sits directly below \code{top}, which
+is 16-byte aligned. After the six pops and \code{ret}, \code{rsp == top}.
+Each \code{call} in the trampoline then pushes 8 bytes, so the callee sees
+\code{rsp \% 16 == 8}, as the ABI requires. A wrong value shows up later
+as a crash on an aligned SSE store in compiled code.
+
+%-------------------------------------------------------------
+\section{Address-Space Switch}
+Load CR3 before calling \code{switch\_context}, with interrupts disabled.
+The kernel image, direct map, and all kernel stacks must be mapped at the
+same virtual addresses in every address space (identical upper-half PML4
+entries), or the code after the CR3 write will fault.
+
+\begin{lstlisting}[style=cstyle]
+static inline uint64_t read_cr3(void)
+{
+    uint64_t v;
+    __asm__ volatile("movq %%cr3, %0" : "=r"(v));
+    return v;
+}
+
+static inline void write_cr3(uint64_t v)
+{
+    __asm__ volatile("movq %0, %%cr3" :: "r"(v) : "memory");
+}
+
+extern void tss_set_rsp0(uint64_t rsp0);
+extern void switch_context(struct context **old, struct context *new);
+
+void sched_switch(struct task *prev, struct task *next)
+{
+    tss_set_rsp0(next->kstack_top); /* traps from user mode */
+    if (next->cr3 != read_cr3()) /* avoid needless TLB flush */
+        write_cr3(next->cr3);
+    switch_context(&prev->ctx, next->ctx);
+}
+\end{lstlisting}
+
+%-------------------------------------------------------------
+\section{Run Queue and Scheduler}
+Round-robin. The caller must hold the scheduler lock or have interrupts
+disabled. Invariant: \code{current} is on no list, and a task is on at
+most one list through \code{link}.
+
+\begin{lstlisting}[style=cstyle]
+static struct list_node runq; /* list_init(&runq) at boot */
+struct task *current;
+static struct task idle_task; /* never on runq */
+
+void schedule(void)
+{
+    struct task *prev = current, *next;
+
+    if (prev->state == TASK_RUNNING && prev != &idle_task)
+        list_add_tail(&prev->link, &runq);
+
+    if (list_empty(&runq)) {
+        next = &idle_task;
+    } else {
+        next = container_of(runq.next, struct task, link);
+        list_del(&next->link);
+    }
+
+    if (next == prev)
+        return;
+    current = next;
+    sched_switch(prev, next);
+}
+\end{lstlisting}
+
+\paragraph{Blocking and waking.} To block: set \code{state = TASK\_BLOCKED},
+add the task to a wait queue (reusing \code{link}), call \code{schedule()}.
+To wake: remove it from the wait queue, set \code{TASK\_RUNNING}, append to
+\code{runq}. Enqueue and set \code{BLOCKED} under the same lock the waker
+takes, otherwise a wakeup can be lost and the task sleeps forever.
+
+%-------------------------------------------------------------
+\section{All-Tasks List}
+Used for PID lookup, debugging dumps, and parent/child bookkeeping.
+
+\begin{lstlisting}[style=cstyle]
+static struct list_node all_tasks; /* list_init(&all_tasks) at boot */
+
+void task_register(struct task *t) /* caller holds task-list lock */
+{
+    list_add_tail(&t->all_link, &all_tasks);
+}
+
+void task_unregister(struct task *t) /* when the zombie is reaped */
+{
+    list_del(&t->all_link);
+}
+
+struct task *task_find(int pid) /* caller holds the lock */
+{
+    struct list_node *n;
+    for (n = all_tasks.next; n != &all_tasks; n = n->next) {
+        struct task *t = container_of(n, struct task, all_link);
+        if (t->pid == pid)
+            return t;
+    }
+    return NULL;
+}
+\end{lstlisting}
+
+%-------------------------------------------------------------
+\section{Invariants and Pitfalls}
+\begin{itemize}
+  \item Every existing task is on \code{all\_tasks} exactly once. Registering
+        twice creates a cycle and scans loop forever.
+  \item A task is on at most one of \{run queue, a wait queue\}.
+  \item All list operations need interrupts disabled (single core) or an
+        interrupt-safe spinlock (SMP).
+  \item Do not free an entry while scanning. Read \code{next} before deleting.
+  \item A pointer from \code{task\_find} is valid only while the lock is held.
+        On SMP, add reference counting.
+  \item A task cannot free its own kernel stack. Mark it \code{TASK\_ZOMBIE},
+        switch away, and let a reaper free it.
+  \item The idle task loops on \code{sti; hlt}.
+  \item Not handled here: FPU/SIMD state (build with
+        \code{-mgeneral-regs-only} or add \code{xsave}), FS/GS base MSRs,
+        and per-CPU \code{current} for SMP.
+\end{itemize}
+\begin{lstlisting}[style=cstyle]
+#include <stddef.h>
+
+struct list_node { struct list_node *prev, *next; };
+
+static inline void list_init(struct list_node *h) { h->prev = h->next = h; }
+static inline int list_empty(const struct list_node *h) { return h->next == h; }
+
+static inline void list_add_tail(struct list_node *n, struct list_node *h)
+{
+    n->prev = h->prev; n->next = h;
+    h->prev->next = n; h->prev = n;
+}
+
+static inline void list_del(struct list_node *n)
+{
+    n->prev->next = n->next; n->next->prev = n->prev;
+    n->prev = n->next = n; /* self-linked = "not on any list" */
+}
+
+#define container_of(p, T, m) ((T *)((char *)(p) - offsetof(T, m)))
+
+enum { TASK_RUNNING, TASK_BLOCKED, TASK_ZOMBIE };
+
+struct task {
+    struct context *ctx; /* still offset 0 */
+    uint64_t kstack_top;
+    uint64_t cr3;
+    int pid;
+    int state;
+    struct list_node link; /* run queue OR a wait queue, never both */
+};
+
+static struct list_node runq; /* list_init(&runq) at boot */
+struct task *current;
+static struct task idle_task; /* never on runq; runs when runq is empty */
+
+/* Caller holds the scheduler lock / has interrupts disabled. */
+void schedule(void)
+{
+    struct task *prev = current, *next;
+
+    /* Still runnable (yield or preemption)? Put it at the back. */
+    if (prev->state == TASK_RUNNING && prev != &idle_task)
+        list_add_tail(&prev->link, &runq);
+
+    if (list_empty(&runq)) {
+        next = &idle_task;
+    } else {
+        next = container_of(runq.next, struct task, link);
+        list_del(&next->link);
+    }
+
+    if (next == prev)
+        return;
+    current = next;
+    sched_switch(prev, next); /* from the earlier message */
+}
+\end{lstlisting}
+% \end{document}

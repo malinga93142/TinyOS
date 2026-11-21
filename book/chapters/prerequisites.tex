@@ -1,0 +1,92 @@
+\chapter{Prerequisites \& Environment Setup}
+
+Before building a kernel from the ground up, you need to set up a clean, predictable development environment. Operating system development is extremely sensitive to toolchain behaviors, linker scripts, and target architectures.
+
+This guide outlines the software, host setup, and foundational knowledge required to follow along smoothly.
+
+\section{1. Host Operating System}
+
+The instructions and build scripts in this book assume a \textbf{GNU/Linux} host environment (Ubuntu/Debian, Fedora, or Arch Linux are ideal).
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{macOS} users can develop using a Docker container or a Linux virtual machine, as macOS native toolchains (like Clang/lld) handle ELF binaries and multiboot headers differently.
+\item
+  \textbf{Windows} users are strongly encouraged to use \textbf{WSL2 (Windows Subsystem for Linux)} running Ubuntu.
+\end{itemize}
+
+\section{2. Required Software Packages}
+
+To compile the assembly stubs, link raw binary images, create bootable ISOs, and test your kernel in an emulator, install the following packages:
+
+\subsection{On Ubuntu / Debian / WSL:}
+
+\begin{lstlisting}
+sudo apt update
+sudo apt install build-essential nasm xorriso grub-pc-bin grub-common qemu-system-x86_64 mtools
+
+\end{lstlisting}
+
+\subsection{On Fedora:}
+
+\begin{lstlisting}
+sudo dnf install @development-tools nasm xorriso grub2-tools qemu-system-x86
+
+\end{lstlisting}
+
+\subsection{What Each Tool Does:}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{\texttt{build-essential}}: Provides GCC, GNU \texttt{make}, and core compilation utilities.
+\item
+  \texttt{nasm} or GNU \texttt{gas}: Used for writing low-level x86 assembly. (The listings in this book use GNU \texttt{gas} in AT\&T syntax).
+\item
+  \textbf{\texttt{xorriso}}: Required to generate bootable ISO images containing GRUB and your kernel binary.
+\item
+  \texttt{grub-pc-bin} / \texttt{grub-common}: Supplies GRUB bootloader modules needed to create a Multiboot2-compliant ISO.
+\item
+  \textbf{\texttt{qemu-system-x86\_64}}: The hardware emulator used to boot and debug your kernel without risking your host machine.
+\end{itemize}
+
+\section{3. The Cross-Compiler Consideration}
+
+While you \emph{can} sometimes use your host's default GCC compiler (\texttt{gcc}), doing so for OS development can introduce subtle bugs because the host compiler targets your host OS (e.g., Linux user-space with glibc linked by default).
+
+For a production-grade OS, you should ideally build a GCC cross-compiler targeting \texttt{x86\_64-elf}.
+
+You can verify if you need one by checking your compiler target:
+
+\begin{lstlisting}
+gcc -dumpmachine
+
+\end{lstlisting}
+
+If it outputs something like \texttt{x86\_64-linux-gnu}, your compiler expects a Linux runtime. For early-stage kernel development, we will bypass standard libraries entirely (\texttt{-ffreestanding}, \texttt{-nostdlib}), making a bare-metal \texttt{x86\_64-elf} cross-compiler the cleanest choice. (Detailed instructions for building an \texttt{x86\_64-elf} cross-compiler can be found on the OSDev Wiki).
+
+\section{4. Recommended Background Knowledge}
+
+Building an operating system touches every layer of computer systems. You will feel right at home if you are comfortable with:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{C Programming:} Pointers, manual memory management, bitwise operations (\texttt{\&}, \texttt{\textbar{}}, \texttt{\textless{}\textless{}}, \texttt{\textgreater{}\textgreater{}}), and volatile variables.
+\item
+  \textbf{Assembly Language:} Basic x86 registers (\texttt{rax}, \texttt{rsp}, \texttt{rip}, control registers like \texttt{cr0}, \texttt{cr3}), stack frames, and calling conventions.
+\item
+  \textbf{Linker Scripts:} Understanding text, data, and bss sections, and how Virtual Memory Addresses (VMA) differ from Load Memory Addresses (LMA).
+\item
+  \textbf{Computer Architecture:} How CPUs fetch instructions, caches, and basic memory management unit (MMU) concepts.
+\end{itemize}
+
+\section{5. Verifying Your Setup}
+
+Run the following command to verify that your QEMU and build tools are ready:
+
+\begin{lstlisting}
+qemu-system-x86_64 --version
+\end{lstlisting}
+If QEMU responds with version information and your assembler/compiler are accessible, you are ready to tackle Chapter 1 and bring your kernel into long mode!

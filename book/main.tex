@@ -1,0 +1,38 @@
+\documentclass[
+  paper=a4,
+  fontsize=11pt,
+  numbers=noenddot,
+]{scrbook}
+\usepackage{draftwatermark}
+\input{preamble}
+
+\title{\fontsize{30}{36}\selectfont Kernel from Ground Up}
+% \subtitle{Booting x86-64 in C and Assembly}
+\subtitle{Hard-Won Techniques and Tricks for Building an OS kernel from Scratch}
+\setkomafont{title}{\sffamily\bfseries}
+\setkomafont{subtitle}{\sffamily\Large}
+
+\author{Malinga RK \\ Central University of Tamil Nadu}
+\SetWatermarkText{DRAFT}
+\SetWatermarkScale{5}
+\SetWatermarkLightness{0.9}
+\begin{document}
+% \frontmatter
+{
+  \let\newpage\relax
+  \maketitle
+  \vspace{2cm}
+  \begin{center}
+      {\color{red}\itshape\Large Draft --- For Review Purposes Only}
+  \end{center}
+}
+
+% Now force the page break so your actual content starts on page 2
+\tableofcontents
+% \mainmatter
+% Each file is generated from chapters/*.md and starts with its own \chapter.
+\include{chapters/prerequisites}
+\include{chapters/chapter1}
+\include{chapters/chapter2}
+\include{ch4}
+\end{document}

@@ -1,0 +1,23 @@
+BasedOnStyle: llvm
+
+# Fine-tuned GNU style overrides for precise control
+Language: Cpp
+IndentWidth: 2
+ColumnLimit: 90
+
+# GNU coding standards prefer spaces for indentation
+UseTab: Never
+
+# Brace placement (GNU style puts braces on a new line for functions, control statements, etc.)
+BreakBeforeBraces: llvm
+
+# Spaces
+SpaceBeforeParens: ControlStatements
+SpaceAfterCStyleCast: false
+SpacesInParentheses: false
+SpacesBeforeTrailingComments: 2
+
+# Indentation specifics
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+PointerAlignment: Right

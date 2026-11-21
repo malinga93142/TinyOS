@@ -1,0 +1,286 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  rulecolor=\color{gray!50},
+  backgroundcolor=\color{gray!8},
+  breaklines=true,
+  showstringspaces=false,
+  aboveskip=0.8em,
+  belowskip=0.8em
+}
+\newcommand{\cmd}[1]{\texttt{#1}}
+\setlist{itemsep=2pt,topsep=4pt}
+
+\title{QEMU Debugging Reference for Kernel Development}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\bigskip
+
+\section{Choosing the Accelerator}
+The most important decision is whether to run under KVM or under TCG
+(QEMU's software emulator), because it determines which debugging
+facilities exist.
+\begin{itemize}
+  \item The \cmd{-d} logging categories (\cmd{int}, \cmd{in\_asm},
+        \cmd{exec}, \cmd{mmu}, \cmd{cpu\_reset}) work \textbf{only under TCG}.
+        Under \cmd{-enable-kvm} the host kernel delivers exceptions and
+        interrupts, so QEMU never observes them and \cmd{-d int} prints nothing.
+  \item \cmd{-d guest\_errors} and \cmd{-d unimp} still work under KVM,
+        because they log device-emulation events.
+  \item TCG does not provide PCID/INVPCID or AVX-512, and its timing differs
+        from real hardware. A feature check that passes under KVM can fail under TCG.
+  \item Recommended workflow: reproduce the bug under KVM, then trace it under TCG.
+\end{itemize}
+\section{Command-Line Flags}
+\begin{lstlisting}
+qemu-system-x86_64 -accel tcg -cpu max -smp 1 \
+  -m 512M -cdrom kernel.iso -display none \
+  -serial mon:stdio \
+  -no-reboot -no-shutdown \
+  -d int,cpu_reset,guest_errors,unimp -D qemu.log \
+  -debugcon file:debugcon.log \
+  -device isa-debug-exit,iobase=0xf4,iosize=0x04
+\end{lstlisting}
+
+\begin{description}[style=nextline]
+  \item[\cmd{-no-reboot -no-shutdown}]
+    A triple fault freezes the VM instead of silently rebooting, so you can
+    inspect it with the monitor.
+  \item[\cmd{-d items -D file}]
+    Enables logging and sends it to a file, so it does not interleave with
+    serial output.
+  \item[\cmd{-debugcon file:debugcon.log}]
+    Captures bytes written with \cmd{outb(0xe9, c)}. It needs no driver, so it
+    works before serial is initialised.
+  \item[\cmd{-device isa-debug-exit}]
+    \cmd{outb(0xf4, code)} makes QEMU exit with status \cmd{(code<<1)|1}, which
+    is useful for automated tests.
+  \item[\cmd{-smp 1}]
+    Removes AP startup and SIPI traffic from the logs. Add CPUs back once the
+    single-CPU path works.
+  \item[\cmd{-cpu qemu64}]
+    A strictness test. If your kernel accidentally depends on a host feature,
+    it faults here but works under \cmd{-cpu host} or \cmd{max}.
+  \item[\cmd{-s -S}]
+    Starts a GDB server on TCP port 1234 and pauses at reset (see
+    Section~\ref{sec:gdb}).
+\end{description}
+
+\subsection*{Additional \texttt{-d} items}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Item & Meaning \\
+\midrule
+\cmd{int}         & Every exception and interrupt delivery, with register state \\
+\cmd{cpu\_reset}  & CPU state dump on reset, including triple faults \\
+\cmd{guest\_errors} & Invalid guest accesses to emulated devices \\
+\cmd{unimp}       & Unimplemented device features the guest touched \\
+\cmd{in\_asm}     & Guest code blocks as they are translated \\
+\cmd{exec}        & Every executed translation block (very verbose) \\
+\cmd{cpu}         & CPU state at each translation block \\
+\cmd{mmu}         & MMU and page-table activity \\
+\cmd{op}          & TCG operations (very verbose) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Run \cmd{-d help} to list what your build supports. Items are combined with commas.
+\section{Monitor Basics}
+
+With \cmd{-serial mon:stdio}, the serial console and the QEMU monitor share the
+terminal.
+
+\begin{lstlisting}
+Ctrl-A c       toggle between serial console and monitor
+Ctrl-A x       quit QEMU
+
+stop           pause the VM
+cont           resume
+system_reset   reset the guest
+nmi            inject an NMI (needs a handler in your IDT)
+help info      list `info` subcommands in your build
+quit
+\end{lstlisting}
+
+Run \cmd{stop} before inspecting state, otherwise the registers change while you
+read them. Command availability varies between QEMU versions, so check
+\cmd{help info} on your build.
+
+\section{CPU State and Disassembly}
+
+\begin{lstlisting}
+info registers          # current CPU
+info registers -a       # all CPUs
+info cpus               # per-CPU program counter and halted status
+
+x/8i $rip               # disassemble 8 instructions at RIP
+x/16gx $rsp             # 16 quadwords at RSP (virtual addresses)
+p $rax                  # print a register
+\end{lstlisting}
+
+\subsection*{Reading an \texttt{info registers} dump}
+
+\begin{itemize}
+  \item \cmd{HLT=1} means the CPU executed \cmd{hlt}. With IF set, it is idle and
+        waiting for an interrupt.
+  \item QEMU prints RIP \emph{after} the \cmd{hlt}, so the instruction is
+        usually at RIP$-1$.
+  \item The flag string \cmd{[---Z-P-]} shows DF, OF, SF, ZF, AF, PF, CF only.
+        IF is not shown, so read it from bit 9 of the \cmd{RFL} hex value.
+  \item \cmd{CS64} in the CS line means the CPU is executing 64-bit code.
+  \item \cmd{CPL} is the current privilege level.
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Register & Bit & Meaning \\
+\midrule
+CR0   & 0, 31, 16 & PE, PG, WP \\
+CR4   & 4, 5, 9, 17, 18 & PSE, PAE, OSFXSR, PCIDE, OSXSAVE \\
+EFER  & 0, 8, 10, 11 & SCE, LME, LMA, NXE \\
+\bottomrule
+\end{tabular}
+\end{center}
+\section{Memory and Paging}
+
+\begin{lstlisting}
+info mem                       # virtual mappings with permissions
+info tlb                       # cached translations
+gva2gpa 0xffffff8000101d46     # walk the page tables for one address
+xp /8gx 0x109000               # read PHYSICAL memory (here: the PML4)
+info mtree                     # physical address map
+info mtree -f                  # flattened view
+
+memsave  0xffffff8000100000 0x1000 virt.bin    # dump virtual memory
+pmemsave 0x100000 0x1000 phys.bin              # dump physical memory
+dump-guest-memory core.elf                     # full guest core file
+\end{lstlisting}
+
+To verify a mapping by hand, take CR3 from \cmd{info registers}, then read
+PML4, PDPT, PD and PT entries with \cmd{xp} and compare them with what your
+code wrote. \cmd{info mem} is the quickest check of a higher-half mapping.
+\section{Interrupt Hardware}
+
+\begin{lstlisting}
+info pic        # 8259 IRR/IMR/ISR (IOAPIC pins in some builds)
+info lapic      # LVT entries, timer, SPIV, ICR, IRR/ISR
+info irq        # per-IRQ counts (not in every build)
+info pci
+info qtree      # device tree, e.g. confirm serial at 0x3f8
+\end{lstlisting}
+
+\begin{itemize}
+  \item \cmd{imr=ff} on the master PIC: every legacy IRQ is masked.
+  \item \cmd{irr} set and \cmd{isr} clear: the interrupt is pending but not delivered.
+  \item \cmd{isr} stuck set: the handler never sent an EOI.
+  \item LVT value \cmd{0x10000} has bit 16 set, meaning that entry is masked.
+  \item A halted CPU with IF set and everything masked will never wake up.
+\end{itemize}
+\section{Reading the \texttt{-d int} Log}
+
+\begin{lstlisting}
+grep -nE 'check_exception|Triple fault|^ *[0-9]+: v=' qemu.log | tail -30
+\end{lstlisting}
+
+\begin{itemize}
+  \item Each \cmd{v=XX e=XXXX ... CR2=...} line is one exception or interrupt
+        delivery. \cmd{v} is the vector, \cmd{e} the error code.
+  \item \cmd{check\_exception old: ... new: ...} shows the fault chain that ends
+        in a double or triple fault.
+  \item \cmd{cpu\_reset} dumps the full CPU state at the triple fault.
+  \item Once timer interrupts are on, \cmd{int} logs every tick. Filter the log
+        or drop \cmd{int} for long runs.
+\end{itemize}
+\section{GDB over QEMU}\label{sec:gdb}
+
+\begin{lstlisting}
+# terminal 1
+qemu-system-x86_64 ... -s -S
+
+# terminal 2
+gdb -q boot.elf \
+    -ex 'set architecture i386:x86-64' \
+    -ex 'target remote :1234'
+(gdb) hbreak kmain
+(gdb) continue
+(gdb) monitor info lapic       # any HMP command works
+(gdb) info registers rip
+\end{lstlisting}
+
+\begin{itemize}
+  \item Use \cmd{hbreak} instead of \cmd{break} in early boot. Software
+        breakpoints patch memory through virtual addresses that may not be
+        mapped yet.
+  \item \cmd{watch} is more reliable under TCG than under KVM.
+  \item GDB can get confused when the guest changes mode (real, protected,
+        long). Re-run \cmd{set architecture i386:x86-64} if it does.
+\end{itemize}
+\section{Makefile Targets}
+Appended to an existing Makefile, these add TCG debugging without changing
+earlier rules. Recipe lines need tabs.
+\begin{lstlisting}
+DBG_ITEMS ?= int,cpu_reset,guest_errors,unimp
+DBG_CPU   ?= max
+DBG_SMP   ?= 1
+
+QEMU_TCG_FLAGS := -m 512M -cdrom kernel.iso -serial mon:stdio \
+                  -no-reboot -no-shutdown -display none \
+                  -smp $(DBG_SMP) -accel tcg -cpu $(DBG_CPU) \
+                  -d $(DBG_ITEMS) -D qemu.log \
+                  -debugcon file:debugcon.log \
+                  -device isa-debug-exit,iobase=0xf4,iosize=0x04
+
+.PHONY: run-tcg run-tcg-gdb gdb
+run-tcg: iso
+	$(QEMU) $(QEMU_TCG_FLAGS)
+run-tcg-gdb: iso
+	$(QEMU) $(QEMU_TCG_FLAGS) -s -S
+gdb: $(TARGET)
+	gdb -q $(TARGET) -ex 'set architecture i386:x86-64' \
+	    -ex 'target remote :1234'
+\end{lstlisting}
+
+\section{Troubleshooting Checklist}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.34\linewidth}p{0.58\linewidth}@{}}
+\toprule
+Symptom & First things to try \\
+\midrule
+Reboot loop or silent hang
+  & TCG with \cmd{-d int,cpu\_reset -no-reboot -no-shutdown}; read the tail of \cmd{qemu.log} \\
+Silent after \cmd{sti; hlt}
+  & \cmd{info pic} and \cmd{info lapic}: look for masks, pending bits, a missing IDT gate \\
+Wrong or missing mapping
+  & \cmd{info mem}, \cmd{gva2gpa}, then \cmd{xp} on the page tables \\
+SMP oddities
+  & Run with \cmd{-smp 1} first, then \cmd{info cpus} \\
+CPU feature reported missing
+  & Check whether you are running under TCG instead of KVM \\
+Need source-level stepping
+  & \cmd{-s -S} plus \cmd{hbreak} in GDB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}

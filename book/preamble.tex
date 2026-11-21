@@ -1,0 +1,60 @@
+\providecommand{\bookmainfont}{TeX Gyre Pagella}             % body text (serif)
+\providecommand{\booksansfont}{TeX Gyre Heros}               % headings (sans)
+\providecommand{\bookmonofont}{Google Sans Code}   % code
+\usepackage{fontspec}
+\IfFontExistsTF{\bookmainfont}{\setmainfont{\bookmainfont}}{}
+\IfFontExistsTF{\booksansfont}{\setsansfont[Scale=MatchLowercase]{\booksansfont}}{}
+\IfFontExistsTF{\bookmonofont}{\setmonofont[Scale=MatchLowercase]{\bookmonofont}}{}
+\usepackage[Bjornstrup]{fncychap}
+\usepackage{amsmath}                    % aligned
+\usepackage{array,calc,longtable,booktabs}  % pandoc tables (\real is in calc)
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{scrhack}                    % KOMA <-> listings/float list handling
+\lstdefinelanguage{gas}{
+  morecomment=[l]{\#},
+  morestring=[b]",
+  morekeywords={.align,.quad,.long,.word,.byte,.fill,.skip,.set,.rept,.endr,
+      .section,.global,.globl,.code32,.code64,.text,.data,.bss},
+  sensitive=true,
+}
+\definecolor{codebg}{gray}{0.96}
+\definecolor{codecomment}{rgb}{0.7, 0.2, 0.7}
+\definecolor{codekeyword}{rgb}{0.15,0.2,0.6}
+
+
+
+\lstset{
+  language=gas,
+  basicstyle=\ttfamily\small,
+  commentstyle=\color{codecomment},          % no italic in the mono font
+  keywordstyle=\color{codekeyword},
+  morekeywords={mov, push, pop, cli, lgdt, rdmsr, wrmsr, ljmp, cr0, cr3, pml4, cr4,
+  movabs},
+  backgroundcolor=\color{codebg},
+  columns=fixed,                              % monospaced: keep columns aligned
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=true,
+  frame=single,
+  rulecolor=\color{black!25},
+  framerule=0.3pt,
+  xleftmargin=0.5em,
+  xrightmargin=0.5em,
+  aboveskip=0.8em,
+  belowskip=0.8em,
+  % keywordstyle=[2]\color{purple}\bfseries,
+  emph={cli, lgdt, hlt, rdmsr,movabs, wrmsr, ljmp, jmp, orl, or, orq, orw, mov, movw, movl, movq, push, pop},
+  emphstyle=\color{codekeyword},
+  emph={[2]eax, ebx, ecx, edx, esi, edi, esp, ebp, ax, ah, al,  ds, es, fs, gs, ss, sp, rax, rbx, rcx, rdx, rsi, rdi, rsp, rbp},
+  emphstyle={[2]\color{purple}\bfseries},
+  emph={[3]lgdt, cr0, cr3, cr4},
+  emphstyle={[3]\color{codekeyword}\bfseries},
+}
+\usepackage[hidelinks]{hyperref}
+\newcommand{\passthrough}[1]{#1}
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}%
+}
