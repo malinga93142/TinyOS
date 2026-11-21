@@ -23,7 +23,7 @@ You will need:
 
 ### Build
 ```bash
-git clone https://github.com/malinga93142/TintOS.git
+git clone https://github.com/malinga93142/TinyOS.git
 cd TinyOS
 make
 ```
