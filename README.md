@@ -23,28 +23,44 @@ You will need:
 
 ### Build
 ```bash
-git clone https://github.com/malinga93142/TinyOS.git
-cd TinyOS
-make
+$ git clone https://github.com/malinga93142/TinyOS.git
+$ cd TinyOS
+$ make
 ```
 The build produces a kernel image; check the `Makefile` for the exact output path.
 
 ### Run in QEMU
 
 ```bash
-make run
+$ make run
 ```
 
 ### Debug (Optional)
 Start QEMU with a GDB stub and attach your debugger:
 ```bash
-make run-tcg-gdb # tcg simply stands for tiny-code generator.
+$ make run-tcg-gdb # tcg simply stands for tiny-code generator.
 ```
 In another terminal
 ```bash
-make gdb # this will use a gdb script debug.gdb
+$ make gdb # this will use a gdb script debug.gdb
 ```
 Or you can do it directly by typing commands:
 ```bash
-gdb boot.elf --ex "target remote :1234
+$ gdb boot.elf --ex "target remote :1234
 ```
+
+
+### Source Layout
+All source code lives in two directories:
+ - `include/` -- Kernel headers
+ - `src/` -- Kernel implementation
+Everything else in the tree (notes, experimentation, scripts, etc.,) is supporting material and not part of the build.
+
+### Kernel Capabilities
+The kernel is small, but it already does the following:
+ - **SMP (symmetric multiprocessing) -- multiple CPUs are brought and run kernel in parallel. Per-CPU data is kept separate, and shared state is protected where it matters. This is the kernel's main area of interest.
+ - **Simple task scheduling** -- a basic scheduler picks tasks to run. it is deliberately simple; the goal is to understand scheduling behavior, not to compete with production schedulers.
+ - **Paging** -- virtual memory is enabled via paging. Address space setup (see `src/boot.S`, `src/paging.c`, and `src/pmm.c`) and page-table management are handled by the kernel.
+ - **Physical Memory Management** -- Physical frames are tracked and handed out to the rest of the kernel. This is the layer that backs paging and any kernel allocations. This management uses simple bitmap allocation and next-scan heuristic.
+ - **Syscall interface** -- user code can request the services to kernel through a defined syscall numbers. The interface is minimal and grows as needed.
+ - **User/kernel separation** -- user tasks run with restricted privilege and their own address space, and must trap into the kernel to do anything privileged. This separation is what makes the syscall interface meaningful.
