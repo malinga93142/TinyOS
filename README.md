@@ -64,3 +64,26 @@ The kernel is small, but it already does the following:
  - **Physical Memory Management** -- Physical frames are tracked and handed out to the rest of the kernel. This is the layer that backs paging and any kernel allocations. This management uses simple bitmap allocation and next-scan heuristic.
  - **Syscall interface** -- user code can request the services to kernel through a defined syscall numbers. The interface is minimal and grows as needed.
  - **User/kernel separation** -- user tasks run with restricted privilege and their own address space, and must trap into the kernel to do anything privileged. This separation is what makes the syscall interface meaningful.
+
+### References I Used to Learn
+These are the books, courses, and hands-on work that taught me most of what this kernel does. I learned from them; the mistakes in this kernel are mine.
+
+#### Operating Systems
+ - Remzi H. Arpaci-Dusseau and Andrea C. Arpaci-Dusseau -- *Operating Systems: Three Easy Pieces*
+ - xv6: a simple, Unix-like teaching operating system
+ - Daniel P. Bovet and Macro Cesati - Understanding the Linux Kernel, O'Reily. I used it to see how a real kernel organizes memory addressing, processes, interrupts, and memory management. useful when I wanted to check what a real general purpose or production level kernel does before simplifying it here.
+
+#### Building an OS from Scratch
+- **Philipp Oppermann** -- Writing an OS in Rust, https://os.phil-opp.com/ . A step-by-step series that walks through bootloader, VGA output, interrupts, paging, and heap allocation on x86_64, explaining the hardware mechanics along the way . I used it for the practical, incremental method of getting a kernel to boot and then layering features on top.
+- My own experiments with the Linux kernel. Beyond the books, I spent time building, modifying, and poking at the Linux kernel directly, and much of my understanding of how the pieces above behave in practice rather than how they are described came from that work.
+
+#### Tools and documentation
+- **QEMU** and **GDB**, plus x86_64 architecture manuals (Intel or AMD). These were reference material for running and debugging the kernel, not tutorial reading.
+
+### Languages Used
+
+The kernel is written in **C** (~95%) and **assembly** (~5%).
+
+C does the bulk of the work: scheduler, paging, physical memory management, the syscall path, and the user/kernel split. Assembly is used only where it is actually required, and nowhere else. That means boot and low-level entry paths, context switching, interrupt and exception entry and exit, and the few instructions that C cannot express, or cannot guarantee the compiler will emit the way the hardware requires.
+
+The split is deliberate. Assembly is hard to read, hard to review, and easy to get subtly wrong, so it stays limited to the places where there is no reasonable alternative.
