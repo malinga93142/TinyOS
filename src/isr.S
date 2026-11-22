@@ -98,6 +98,7 @@ ISR_NOERR 29  // VMM Communication Exception
 ISR_ERR 30    // Security Exception
 ISR_NOERR 31  // Reserved
 ISR_NOERR 33
+ISR_NOERR 44
 // LAPIC vectors
 ISR_NOERR 240   // LAPIC timer (LAPIC_VECTOR_TIMER)
 ISR_NOERR 241   // LAPIC thermal
@@ -142,6 +143,7 @@ isr_stub_table:
   .quad isr30
   .quad isr31
   .quad isr33
+  .quad isr44
 .globl lapic_isr_table
 lapic_isr_table:
 	.quad isr240
