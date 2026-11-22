@@ -299,12 +299,12 @@ int kvformat(kputc_fn fn, void *ctx, const char *fmt, va_list ap) {
  }
  return o.n;
 }
-extern int activate_from_fb_from_here;
+extern int activate_fb_from_here;
 static void uart_sink(char c, void *ctx) {
  (void)ctx;
  uart_putc(c);
- if (activate_from_fb_from_here == 1) {}
-  // putc_fb(c);
+ if (activate_fb_from_here == 1)
+  putc_fb(c);
 }
 
 static void puts(const char *s) {

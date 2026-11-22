@@ -2,6 +2,7 @@
 #include "../include/ef.h"
 #include "../include/kbd.h"
 #include "../include/lapic.h"
+#include "../include/mouse.h"
 #include "../include/paging.h"
 #include "../include/percpu.h"
 #include "../include/printk.h"
@@ -108,8 +109,12 @@ void handler(struct exception_frame *ef) {
     break;
   case KBD_VECTOR:
    // puts_fb("fired\n");
-   kbd_irq();
-   break;
+    kbd_irq();
+    break;
+  case MOUSE_VECTOR:
+    // kprintf("mouse fired\n");
+    mouse_irq();
+    break;
   case 240:
     // kprintf("LAPIC TIMER\n");
     lapic_timer_handler();

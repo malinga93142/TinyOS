@@ -27,5 +27,6 @@ init_pics(int pic1, int pic2) {
 
   /* disable all IRQs */
  outb(PIC1 + 1, 0xFF);
+ outb(PIC2 + 1, 0xFF);
  kprintf("[PIC] PIC REMAPPING INIT\n");
 }
