@@ -16,7 +16,7 @@ void add_idt(struct idt_entry *__idt, uint8_t ist_idx, uint64_t handler,
 }
 
 // declare the table of stubs defined in your assembly file. look in file isr.S
-extern void *isr_stub_table[33];
+extern void *isr_stub_table[35];
 extern void *lapic_isr_table[7];
 
 void init_idt(void) {
