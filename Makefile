@@ -23,7 +23,8 @@ USER_PROGS := hello
 
 KERNEL_CFLAGS := -g -m64 -ffreestanding -nostdlib -fno-pie -mcmodel=$(MCMODEL) \
                  -mno-red-zone -mno-avx2 -mno-sse -mno-avx -fno-stack-protector \
-                 -Wall -Wextra -DCONFIG_LAPIC_NMI=$(CONFIG_NMI) -Iinclude -Isubsystems
+                 -Wall -Wextra -DCONFIG_LAPIC_NMI=$(CONFIG_NMI)  \
+                 -Iinclude -Isubsystems
 USER_CFLAGS   := -m64 -O2 -ffreestanding -nostdlib -static -fno-pie -no-pie \
                  -fno-stack-protector -mgeneral-regs-only -Wall -Wextra
 ASFLAGS       := -g -m64
