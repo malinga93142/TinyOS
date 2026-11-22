@@ -11,6 +11,8 @@
 #include "../include/kmalloc.h"
 #include "../include/lapic.h"
 #include "../include/mb.h"
+#include "../include/misc.h"
+#include "../include/mouse.h"
 #include "../include/paging.h"
 #include "../include/pci.h"
 #include "../include/percpu.h"
@@ -148,28 +150,37 @@ static void wake_ap(void) {
 static void console_loop(void) {
  struct key_event ev;
  for (;;) {
+  mouse_poll();
   while (kbd_poll(&ev))
    if (ev.pressed &&
        ((ev.ascii >= 32 && ev.ascii < 127) || ev.ascii == '\n' ||
         ev.ascii == '\b' || ev.ascii == '\t'))
     kprintf("%c", ev.ascii);
-    // putc_fb(ev.ascii);
+     // putc_fb(ev.ascii);
+  // uint8_t st = inb(0x64);
+  // if (st & 1) {
+  // 	uint8_t b = inb(0x60);
+  //  kprintf("[MOUSE] st=%x b=%x\n", st,b);
+  // 	// if (b)
+  // }
   asm volatile("hlt");
  }
 }
-int activate_from_fb_from_here = 0;
+int activate_fb_from_here = 0;
 void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  (void)mb_magic;
  early_init(mb_info_ptr);
  // kprintf("\n[KERNEL] KERNEL STARTED\n");
  memory_init();
- cpu_features_init();
  acpi_init((uintptr_t)mb_info_ptr);
  fb_map();
+ activate_fb_from_here = 1;
  fb_init(&fb);
- activate_from_fb_from_here = 1;
+ cpu_features_init();
  lapic_boot_init();
  kbd_init();
+ mouse_init(fb.width, fb.height);
+ // mouse_selftest();
  smp_start_aps();
  kprintf("[KERNEL] KMALLOC INIT\n");
  kmalloc_init();
@@ -190,14 +201,5 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  wait_ap_halt();
  wake_ap();
  // test();
- // putc_fb(0x42);
- // putc_fb(0x43);
- // putc_fb(0x44);
- // putc_fb(0x45);
- // putc_fb(0x42);
- gfx_draw_string(&fb, 1, 0,"A", 0x00FFFFFF, 4);
- gfx_draw_string(&fb, 30,0,"B", 0x00FFFFCC, 4);
- gfx_draw_string(&fb, 60,0,"C", 0x00FFFFFF, 4);
- kprintf("Copying A, B, C to framebuffer\n");
  console_loop();
 }

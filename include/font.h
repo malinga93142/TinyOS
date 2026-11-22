@@ -3,63 +3,11 @@
 
 #include <stdint.h>
 
-/* 8x8, row-major, MSB = leftmost pixel. */
-static inline const uint8_t * font_glyph(char c) {
-  static const uint8_t A[8]
-      = { 0x18, 0x3C, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x00 };
-  static const uint8_t B[8]
-      = { 0x7C, 0xC6, 0xC6, 0xFC, 0xC6, 0xC6, 0x7C, 0x00 };
-  static const uint8_t C[8]
-      = { 0x7E, 0xC6, 0xC0, 0xC0, 0xC0, 0xC6, 0x7E, 0x00 };
-  static const uint8_t H[8]
-      = { 0x66, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66, 0x00 };
-  static const uint8_t e[8]
-      = { 0x00, 0x00, 0x3C, 0x66, 0x7E, 0x60, 0x3C, 0x00 };
-  static const uint8_t l[8]
-      = { 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x1C, 0x00 };
-  static const uint8_t o[8]
-      = { 0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x3C, 0x00 };
-  static const uint8_t W[8]
-      = { 0x63, 0x63, 0x63, 0x6B, 0x6B, 0x77, 0x63, 0x00 };
-  static const uint8_t r[8]
-      = { 0x00, 0x00, 0x6C, 0x76, 0x60, 0x60, 0x60, 0x00 };
-  static const uint8_t d[8]
-      = { 0x06, 0x06, 0x3E, 0x66, 0x66, 0x66, 0x3E, 0x00 };
-  static const uint8_t comma[8]
-      = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x30 };
-  static const uint8_t bang[8]
-      = { 0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x18, 0x00 };
-  static const uint8_t space[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+extern const uint8_t font8x8_data[128][8];
 
-  switch (c)
-    {
-    case 'A':
-      return A;
-    case 'B':
-      return B;
-    case 'C':
-      return C;
-    case 'H':
-      return H;
-    case 'e':
-      return e;
-    case 'l':
-      return l;
-    case 'o':
-      return o;
-    case 'W':
-      return W;
-    case 'r':
-      return r;
-    case 'd':
-      return d;
-    case ',':
-      return comma;
-    case '!':
-      return bang;
-    default:
-      return space;
-    }
+static inline const uint8_t *font_glyph(char c) {
+ unsigned char u = (unsigned char)c;
+ return font8x8_data[u < 128 ? u : '?'];
 }
 
-#endif /* FONT_H */
+#endif

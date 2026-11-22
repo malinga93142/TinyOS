@@ -1,5 +1,6 @@
 #include "../include/kbd.h"
 #include "../include/idt.h"
+#include "../include/misc.h"
 #include "../include/lapic.h"
 #include "../include/printk.h"
 #include "../include/spinlock.h"
@@ -121,12 +122,13 @@ static void handle_scancode(uint8_t sc) {
 
 void kbd_irq(void) {
  uint8_t status;
- while ((status = port_in8(KBD_STATUS_PORT)) & STATUS_OUT_FULL) {
-  uint8_t sc = port_in8(KBD_DATA_PORT);
-  if (!(status & STATUS_AUX))
-   handle_scancode(sc);
- }
- port_out8(PIC1_CMD, PIC_EOI);
+ while (((status = inb(KBD_STATUS_PORT))
+       & (STATUS_AUX | STATUS_OUT_FULL)) == STATUS_OUT_FULL)
+  handle_scancode(inb(KBD_DATA_PORT));
+  // uint8_t sc = inb(KBD_DATA_PORT);
+  // if (!(status & STATUS_AUX))
+
+ outb(PIC1_CMD, PIC_EOI);
 }
 
 int kbd_poll(struct key_event *ev) {
@@ -142,9 +144,9 @@ int kbd_poll(struct key_event *ev) {
 
 void kbd_init(void) {
  for (int i = 0; i < 16 && (port_in8(KBD_STATUS_PORT) & STATUS_OUT_FULL); i++)
-  port_in8(KBD_DATA_PORT);
+  inb(KBD_DATA_PORT);
  add_idt(&IDT[KBD_VECTOR], 0, (uint64_t)(uintptr_t)isr33,
          IDT_INTERRUPT_GATE | IDT_PRESENT);
- port_out8(PIC1_DATA, port_in8(PIC1_DATA) & ~(1 << KBD_IRQ));
+ outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << KBD_IRQ));
  lapic_enable_extint();
 }
