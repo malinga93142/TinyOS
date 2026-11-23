@@ -46,7 +46,7 @@ $ make gdb # this will use a gdb script debug.gdb
 ```
 Or you can do it directly by typing commands:
 ```bash
-$ gdb boot.elf --ex "target remote :1234
+$ gdb boot.elf --ex "target remote :1234"
 ```
 
 
