@@ -32,6 +32,31 @@ static int mm_map_page(struct mm *mm, uint64_t va, uint64_t flags, int flush) {
  }
  return 0;
 }
+static struct vma *mm_find_vma(struct mm *mm, uint64_t addr) {
+ struct vma *v, *r = NULL;
+ uint64_t fl = spin_lock_irqsave(&mm->mm_lock);
+ list_for_each_entry(v, &mm->vma_list, list) {
+  if (addr < v->start)
+   break;
+  if (addr < v->end) {
+   r = v;
+   break;
+  }
+ }
+ spin_unlock_irqrestore(&mm->mm_lock, fl);
+ return r;
+}
+
+int mm_handle_fault(struct mm *mm, uint64_t addr, uint64_t err) {
+ struct vma *v = mm_find_vma(mm, addr);
+ if (!v || !vma_is_backed(v) || (err & 1))
+  return -1;
+ if (((err & 2) && !(v->perms & VMA_WRITE)) ||
+     ((err & 16) && !(v->perms & VMA_EXEC)))
+  return -1;
+ return mm_map_page(mm, addr & ~(uint64_t)(PAGE_SIZE - 1), vma_page_flags(v),
+                    mm_is_current(mm));
+}
 static void mm_unmap_range(struct mm *mm, uint64_t start, uint64_t end) {
  int flush = mm_is_current(mm);
  for (uint64_t va = start; va < end; va += PAGE_SIZE) {
@@ -53,15 +78,6 @@ static int mm_map_vma(struct mm *mm, struct vma *v) {
  int flush = mm_is_current(mm);
  uint64_t va;
  for (va = v->start; va < v->end; va += PAGE_SIZE) {
-  // uint64_t pa = pmm_alloc_frame();
-  // if (!pa)
-  //  break;
-  // kmemset(PA_TO_VA(pa), 0, PAGE_SIZE);
-  // if (paging_map_page_in(mm->pml4_phys, va, pa, flags, flush) == PAGING_ERR) {
-  //  pmm_free_frame(pa);
-  //  break;
-  // }
-  // for (va = v->start; va < v->end; va += PAGE_SIZE)
   if (mm_map_page(mm, va, flags, flush) < 0)
    break;
  }
@@ -178,28 +194,4 @@ void mm_copy_to(struct mm* mm, uint64_t va, const void *src, uint64_t n) {
 		n -= c;
 	}
 }
-static struct vma *mm_find_vma(struct mm *mm, uint64_t addr) {
- struct vma *v, *r = NULL;
- uint64_t fl = spin_lock_irqsave(&mm->mm_lock);
- list_for_each_entry(v, &mm->vma_list, list) {
-  if (addr < v->start)
-   break;
-  if (addr < v->end) {
-   r = v;
-   break;
-  }
- }
- spin_unlock_irqrestore(&mm->mm_lock, fl);
- return r;
-}
 
-int mm_handle_fault(struct mm *mm, uint64_t addr, uint64_t err) {
- struct vma *v = mm_find_vma(mm, addr);
- if (!v || !vma_is_backed(v) || (err & 1))
-  return -1;
- if (((err & 2) && !(v->perms & VMA_WRITE)) ||
-     ((err & 16) && !(v->perms & VMA_EXEC)))
-  return -1;
- return mm_map_page(mm, addr & ~(uint64_t)(PAGE_SIZE - 1), vma_page_flags(v),
-                    mm_is_current(mm));
-}
