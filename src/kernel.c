@@ -155,7 +155,7 @@ static void console_loop(void) {
    if (ev.pressed &&
        ((ev.ascii >= 32 && ev.ascii < 127) || ev.ascii == '\n' ||
         ev.ascii == '\b' || ev.ascii == '\t'))
-    kprintf("%c", ev.ascii);
+    kprintf("$%c", ev.ascii);
      // putc_fb(ev.ascii);
   // uint8_t st = inb(0x64);
   // if (st & 1) {
@@ -179,7 +179,7 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  cpu_features_init();
  lapic_boot_init();
  kbd_init();
- mouse_init(fb.width, fb.height);
+ // mouse_init(fb.width, fb.height);
  // mouse_selftest();
  smp_start_aps();
  kprintf("[KERNEL] KMALLOC INIT\n");
@@ -188,9 +188,9 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  pci_enumerate_bus();
  task_init();
  syscall_init();
- // extern const uint8_t hello_start[], hello_end[];
- // task_create_user(hello_start, hello_end - hello_start);
- // task_create_user(hello_start, hello_end - hello_start);
+ // task creation
+ extern const uint8_t hello_start[], hello_end[];
+ task_create_user(hello_start, hello_end - hello_start);
  unmap_lower_half();
  setupfsbase();
  kprintf("[KERNEL] FRAMES= %lu\n", (unsigned long)pmm_free_frames());
@@ -201,5 +201,7 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  wait_ap_halt();
  wake_ap();
  // test();
- console_loop();
+ task_schedule();
+ // console_loop();
+ // shell();
 }

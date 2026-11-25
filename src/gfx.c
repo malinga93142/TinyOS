@@ -10,7 +10,7 @@
 static struct framebuffer *con;
 static spinlock_t con_lock = SPINLOCK_INIT;
 static uint32_t cols, rows, cur_x, cur_y;
-static uint32_t cur_fg = COLOR_WHITE, cur_bg = COLOR_BLACK;
+static uint32_t cur_fg = COLOR_RED, cur_bg = COLOR_BLACK;
 
 static inline uint32_t *row_ptr(struct framebuffer *fb, uint32_t y) {
  return (uint32_t *)((uint8_t *)(uintptr_t)fb->addr + (uint64_t)y * fb->pitch);
