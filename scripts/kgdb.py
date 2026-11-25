@@ -541,7 +541,7 @@ class PtTask(gdb.Command):
         s, e, w, u, nx = r
         perm = "r" + ("w" if w else "-") + ("-" if nx else "x")
         gdb.write(f"  0x{s:016x}-0x{e:016x}  {(e - s) >> 12:>6} pages  "
-                  f"{perm} {'user' if u else 'kern'}\n")
+                  f"{perm} {'user' if u else 'kernel'}\n")
 
     def invoke(self, arg, from_tty):
         argv = gdb.string_to_argv(arg)
