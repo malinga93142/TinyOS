@@ -17,7 +17,7 @@ This kernel is intended for **experimentation only**. It is **not** meant to run
 Because this is an x86-based OS, the **host compiler (GCC or clang) and toolchain are sufficient**. no cross-compiler is required (well, cross-compiler is optional).
 You will need:
  - `gcc` (the one already on your system. if it isn't, just do `apt install gcc`)
- - `make` (which this project uses. you can have your own build system. this project is build agnostic like all)
+ - `make` (which this project uses. you can have your own build system. this project is build-agnostic like all)
  - `qemu-system-i386` or `qemu-system-x86_64` (whichever matches the target)
  - `gdb`: for debugging. Optional, but very useful.
 
