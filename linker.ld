@@ -27,13 +27,20 @@ SECTIONS {
 		*(.bss.*)
 		__bss_end = .;
 	}
-	.percpu : ALIGN(64) {
-    __percpu_start = .;
-    *(.percpu)
-    __percpu_end = .;
+	.percpu_image : {
+  . = ALIGN(4096);
+  percpu_image_va = .;
+  __percpu_start = .;
+  *(.percpu..first);
+  *(.percpu)
+  . = ALIGN(64);
+  *(.percpu..cacheline_aligned);
+  . = ALIGN(4096);
+  *(.percpu..page_aligned);
+  __percpu_end = .;
 	}
 	kernel_end = .;
-    /* Discard unnecessary metadata sections to keep the binary clean */
+ /* Discard unnecessary metadata sections to keep the binary clean */
 	/DISCARD/ : {
 		*(.comment)
 		*(.note.*)

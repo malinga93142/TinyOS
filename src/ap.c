@@ -78,7 +78,6 @@ __attribute__((noreturn)) void ap_main(void) {
   kprintf("[AP %d] HALT\n", cpu_id());
   hpet_delay_us(9000);
   atomic_store_explicit(&ap_halt, 1, memory_order_release);
-  while (1) { asm volatile("pause"); hlt(); break;}
+  while (1) { asm volatile("pause"); hlt(); kprintf("break\n"); break;}
   while (1) { asm volatile("pause"); hlt();}
-  
 }

@@ -1,4 +1,6 @@
 #include "../include/acpi.h"
+#include "../include/misc.h"
+#include <stdint.h>
 
 int acpi_chksum_ok(const void *table, uint32_t length) {
  const uint8_t *bytes = (const uint8_t *)table;
@@ -66,6 +68,12 @@ void acpi_parse_madt(struct acpi_madt *madt, struct cpu_topology *out) {
    if ((lapic->flags & 0x1) && out->cpu_count < MADT_MAX_CPUS) {
     out->apic_ids[out->cpu_count] = lapic->apic_id;
     out->cpu_count++;
+   } else if (entry->type == 1) {
+    outb(0x3f8, '1');
+    while (1) asm volatile("hlt");
+   } else if (entry->type == 2) {
+    while(1)
+     asm volatile("hlt");
    }
   }
   ptr += entry->length;

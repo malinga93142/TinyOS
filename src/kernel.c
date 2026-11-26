@@ -53,6 +53,7 @@ static void early_init(uint32_t mb_info_ptr) {
  // kprintf("[FB] addr=%lx %ux%u pitch=%u\n", (uint64_t)fb.addr, fb.width, fb.height, fb.pitch);
  uart_init();
  percpu_init(0, 0, 1);
+ // ___percpu_init(2);
  // kprintf("[CPU %u] PERCPU INIT\n", cpu_id());
  init_gdt();
  init_idt();
@@ -147,25 +148,6 @@ static void wake_ap(void) {
  if (x2_enabled && topo.cpu_count > 1)
   lapic_send_ipi_x2(topo.apic_ids[1], IPI_WAKE_VECTOR);
 }
-static void console_loop(void) {
- struct key_event ev;
- for (;;) {
-  mouse_poll();
-  while (kbd_poll(&ev))
-   if (ev.pressed &&
-       ((ev.ascii >= 32 && ev.ascii < 127) || ev.ascii == '\n' ||
-        ev.ascii == '\b' || ev.ascii == '\t'))
-    kprintf("$%c", ev.ascii);
-     // putc_fb(ev.ascii);
-  // uint8_t st = inb(0x64);
-  // if (st & 1) {
-  // 	uint8_t b = inb(0x60);
-  //  kprintf("[MOUSE] st=%x b=%x\n", st,b);
-  // 	// if (b)
-  // }
-  asm volatile("hlt");
- }
-}
 int activate_fb_from_here = 0;
 void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  (void)mb_magic;
@@ -173,9 +155,9 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  // kprintf("\n[KERNEL] KERNEL STARTED\n");
  memory_init();
  acpi_init((uintptr_t)mb_info_ptr);
- fb_map();
- activate_fb_from_here = 1;
- fb_init(&fb);
+ // fb_map();
+ // activate_fb_from_here = 1;
+ // fb_init(&fb);
  cpu_features_init();
  lapic_boot_init();
  kbd_init();
@@ -188,12 +170,10 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  pci_enumerate_bus();
  task_init();
  syscall_init();
- // task creation
- extern const uint8_t hello_start[], hello_end[];
- task_create_user(hello_start, hello_end - hello_start);
  unmap_lower_half();
  setupfsbase();
  kprintf("[KERNEL] FRAMES= %lu\n", (unsigned long)pmm_free_frames());
+ ___percpu_init(topo.cpu_count);
  asm volatile("sti");
  lapic_timer_start_periodic(TIMER_HZ);
  atomic_store_explicit(&kernel_ready, 1, memory_order_release);
@@ -202,6 +182,4 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  wake_ap();
  // test();
  task_schedule();
- // console_loop();
- // shell();
 }

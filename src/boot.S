@@ -45,7 +45,7 @@ _start:
  mov %ax, %es
  mov %ax, %fs
  mov %ax, %gs
- mov %ax, %ss 
+ mov %ax, %ss
  ljmp $0x08, $V2P(flush_cs)
 flush_cs:
  mov $V2P(pml4), %ecx
@@ -113,8 +113,7 @@ pml4:
 .align 4096
 pdpt:
   .quad V2P(pd) + 0x03
-  .fill 509, 8, 0
-  .quad V2P(pd) + 0x03
+  .fill 510, 8, 0
   .quad 0
 .align 4096
 pd:

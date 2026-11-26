@@ -73,7 +73,7 @@ static void nmi_handler(struct exception_frame *ef) {
   percpu_write(nmi_pending, 1);
 }
 void ap_wakeup_handler(void) {
-    __asm__ volatile ("wrmsr" : : "c"(X2APIC_MSR_EOI), "a"(0U), "d"(0U));
+ lapic_eoi();
 }
 void handler(struct exception_frame *ef) {
   switch (ef->vector) {
@@ -129,6 +129,7 @@ void handler(struct exception_frame *ef) {
     kprintf("LAPIC CMCI\n");
     break;
   case 253:
+   kprintf("RIP: %lx\n", ef->rip);
    ap_wakeup_handler();
    break;
   case 254:

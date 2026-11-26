@@ -58,37 +58,16 @@ static uint64_t *table_next(uint64_t *tbl, uint64_t idx, int create) {
 
 // Walk PML4 -> PDPT -> PD and return the PT (4K level) for va.
 static uint64_t *walk_to_pt(uint64_t pml4_phys, uint64_t va, int create) {
-  uint64_t *t = tbl_va(pml4_phys);
-  // kprintf("%x\n", t);
-  if (!(t = table_next(t, PML4_INDEX(va), create)) ||
-      !(t = table_next(t, PDPT_INDEX(va), create)) ||
-      !(t = table_next(t, PD_INDEX(va), create)))
-    return NULL;
-  return t;
+ uint64_t *t = tbl_va(pml4_phys);
+ // kprintf("%x\n", t);
+ t = table_next(t, PML4_INDEX(va), create);
+ if (!t) { kprintf("PML4NULL\n"); return NULL; }
+ t = table_next(t, PDPT_INDEX(va), create);
+ if (!t) { kprintf("PDPTNULL\n"); return NULL; }
+ t = table_next(t, PD_INDEX(va), create);
+ if (!t) { kprintf("PDNULL\n"); return NULL; }
+ return t;
 }
-// #define USER_VA_END 0x0000800000000000ULL
-// static uint64_t *walk_to_pt(uint64_t root_phys, uint64_t va, int create) {
-//  uint64_t user = va < USER_VA_END ? PAGE_USER : 0;
-//  uint64_t *table = PA_TO_VA(root_phys);
-//  for (int shift = 39; shift >= 21; shift -= 9) {
-//   uint64_t *ep = &table[(va >> shift) & 0x1FF];
-//   if (!(*ep & PAGE_PRESENT)) {
-//    if (!create)
-//     return NULL;
-//    uint64_t pa = pmm_alloc_frame();
-//    if (!pa)
-//     return NULL;
-//    kmemset(PA_TO_VA(pa), 0, PAGE_SIZE);
-//    *ep = MAKE_ENTRY(pa, PAGE_PRESENT | PAGE_WRITE | user);
-//   } else if (*ep & 0x80) {
-//    return NULL;
-//   } else if (user && !(*ep & PAGE_USER)) {
-//    *ep |= PAGE_USER;
-//   }
-//   table = PA_TO_VA(*ep & PAGE_ADDR_MASK);
-//  }
-//  return table;
-// }
 static inline uint64_t page_offset_mask(int level) {
   return level == 3   ? PAGE_OFFSET_MASK_1G
          : level == 2 ? PAGE_OFFSET_MASK_2M
@@ -121,47 +100,39 @@ pte_t *paging_walk_create(uint64_t pml4_phys, uint64_t va) {
   uint64_t *pt = walk_to_pt(pml4_phys, va, 1);
   return pt ? &pt[PT_INDEX(va)] : NULL;
 }
-// uint64_t paging_map_page_in(uint64_t root_phys, uint64_t va, uint64_t pa,
-//                             uint64_t flags, int flush) {
-//   require_canonical(va);
-//   uint64_t *pt = walk_to_pt(root_phys, va, 1);
-//   if (!pt)
-//     return PAGING_ERR;
-//   if (pt[PT_INDEX(va)] & PAGE_PRESENT) // don't silently remap
-//     return PAGING_ERR;
-//   if (va < 0x0000800000000000)
-//    pt[PT_INDEX(va)] = MAKE_ENTRY(pa, flags | PAGE_PRESENT | PAGE_USER);
-//   else
-//    pt[PT_INDEX(va)] = MAKE_ENTRY(pa, flags | PAGE_PRESENT);
-//   if (flush)
-//     invalidate(va);
-//   return va;
-// }
 uint64_t paging_map_page_in(uint64_t root_phys, uint64_t va, uint64_t pa,
                             uint64_t flags, int flush) {
-  require_canonical(va);
-  uint64_t *pt = walk_to_pt(root_phys, va, 1);
-  if (!pt)
-    return PAGING_ERR;
-  if (pt[PT_INDEX(va)] & PAGE_PRESENT)
-    return PAGING_ERR;
-  if (va < 0x0000800000000000) {
-    uint64_t t = root_phys;
-    for (int s = 39; s >= 21; s -= 9) {
-      uint64_t *e = &((uint64_t *)PA_TO_VA(t))[(va >> s) & 0x1FF];
-      *e |= PAGE_USER;
-      t = *e & PAGE_ADDR_MASK;
-    }
-    flags |= PAGE_USER;
+ require_canonical(va);
+ uint64_t *pt = walk_to_pt(root_phys, va, 1);
+ if (!pt) {
+  kprintf("%lx\n", pt);
+  return PAGING_ERR;
+ }
+ if (pt[PT_INDEX(va)] & PAGE_PRESENT)
+  return PAGING_ERR;
+ if (va < 0x0000800000000000) {
+  uint64_t t = root_phys;
+  for (int s = 39; s >= 21; s -= 9) {
+   uint64_t *e = &((uint64_t *)PA_TO_VA(t))[(va >> s) & 0x1FF];
+   *e |= PAGE_USER;
+   t = *e & PAGE_ADDR_MASK;
   }
-  pt[PT_INDEX(va)] = MAKE_ENTRY(pa, flags | PAGE_PRESENT);
-  if (flush)
-    invalidate(va);
-  return va;
+  flags |= PAGE_USER;
+ }
+ pt[PT_INDEX(va)] = MAKE_ENTRY(pa, flags | PAGE_PRESENT);
+ if (flush)
+  invalidate(va);
+ return va;
 }
-// RETURNS MAPPED VIRTUAL ADDRESS
+/*
+ * maps a page to assigned physical address
+ * va virtual address
+ * pa physical address
+ * flags flags
+ */
 uint64_t paging_map_page(uint64_t va, uint64_t pa, uint64_t flags) {
-  return paging_map_page_in(getcr3() & PAGE_ADDR_MASK, va, pa, flags, 1);
+ // kprintf("%lx\n", va);
+ return paging_map_page_in(getcr3() & PAGE_ADDR_MASK, va, pa, flags, 1);
 }
 
 uint64_t paging_unmap_page_in(uint64_t root_phys, uint64_t va, int flush) {

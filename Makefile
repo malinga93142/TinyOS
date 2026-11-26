@@ -47,7 +47,7 @@ QEMU_COMMON := -machine pc -m $(MEM) \
                -device $(QEMU_DEVICE),id=ahci \
                -device ide-hd,drive=hd0,bus=ahci.0 \
                -serial mon:stdio -no-reboot -no-shutdown -d int \
-               -smp $(SMP) -enable-kvm
+               -smp $(SMP) -enable-kvm -display none
 QEMU_FLAGS     := $(QEMU_COMMON) -cpu host
 QEMU_EXT_FLAGS := $(QEMU_COMMON) -cpu host,+xsave,+avx,+invtsc
 QEMU_GDB_FLAGS := $(QEMU_COMMON) -cpu host -s -S
