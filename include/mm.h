@@ -14,9 +14,11 @@
 #define KERNEL_BASE_OLD 0xFFFFFFFF80000000ULL
 #define KERNEL_TOP  0xFFFFFFFFFFFFFFFFULL
 #define KERNEL_IO_BASE 0xFFFFFFF800000000
+#define PERCPU_BASE (KERNEL_BASE + 0x000000F000000000UL)
 //  Physical <-> Higher-half virtual conversion  Requires kernel direct mapping
 //  of physical memory.
 #define PA_TO_VA(pa) ((void *)((uint64_t)(pa) + KERNEL_BASE))
+#define PA_TO_VA_PERCPU(pa) ((void *)((uint64_t)(pa) + PERCPU_BASE))
 #define VA_TO_PA(va) ((uintptr_t)(va) - KERNEL_BASE)
 #define PA_TO_VA_MMIO(pa) ((void *)((uint64_t)(pa) + KERNEL_IO_BASE))
 #define VA_TO_PA_MMIO(va) ((uint64_t)(va) - KERNEL_IO_BASE)
