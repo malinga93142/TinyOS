@@ -173,7 +173,7 @@ void kmain(uint32_t mb_magic, uint32_t mb_info_ptr) {
  unmap_lower_half();
  setupfsbase();
  kprintf("[KERNEL] FRAMES= %lu\n", (unsigned long)pmm_free_frames());
- ___percpu_init(topo.cpu_count);
+ // ___percpu_init(topo.cpu_count);
  asm volatile("sti");
  lapic_timer_start_periodic(TIMER_HZ);
  atomic_store_explicit(&kernel_ready, 1, memory_order_release);

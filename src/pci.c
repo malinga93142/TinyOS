@@ -54,53 +54,10 @@ void pci_check_device(uint8_t bus, uint8_t device) {
           device_id, class_code, subclass, prog_if);
   if (class_code == 0x01 && subclass == 0x06 && prog_if == 0x01) {
    kprintf("[PCI] AHCI Found\n");
-   // uintptr_t abar = ahci_get_abar(bus, device, func);
-   // kprintf("[AHCI ABAR] %lx\n", abar);
-   // volatile uint32_t *hba = (volatile uint32_t *)PA_TO_VA(abar);
-   // uint32_t cap = hba[0x00/4];
-   // uint32_t pi  = hba[0x0C/4];
-   // uint32_t ver = hba[0x10/4];
-   // kprintf("[AHCI] CAP     = 0x%08x\n", cap);
-   // kprintf("[AHCI] PI      = 0x%08x\n", pi);
-   // kprintf("[AHCI] VERSION = 0x%08x\n", ver);
-   // uint32_t bar4 = pci_config_read(bus, device, func, PCI_REG_BAR4);
-   // kprintf("[AHCI] BAR4= %08x\n", bar4);
-   // if (bar4 & 0x1) {
-   //  uint16_t io_base = bar4 & 0xFFFC;
-   //  kprintf("io_base: %08x\n", io_base);
-   // }
-   // uint16_t cmd = pci_read_word(bus, device, func, 0x04);
-   // if (!(cmd & 1)) {
-   //  kprintf("[IDE] enabled I/O decode\n");
-   // } else {
-   //  kprintf("[IDE] I/O decode already enabled\n");
-   //  uint8_t st = inb(ATA_REG_COMMAND);
-   //  kprintf("[IDE] status=0x%02x\n", st);
-   // }
-   // uint32_t port = 0x100;
-   // uint32_t px_tfd  = hba[(port + 0x20) / 4];   /* task file data */
-   // uint32_t px_sig  = hba[(port + 0x24) / 4];   /* signature */
-   // uint32_t px_ssts = hba[(port + 0x28) / 4];   /* SATA status */
-   // 
-   // kprintf("[AHCI] port0 TFD  = 0x%08x\n", px_tfd);
-   // kprintf("[AHCI] port0 SIG  = 0x%08x\n", px_sig);
-   // kprintf("[AHCI] port0 SSTS = 0x%08x\n", px_ssts);
-   // 
-   // uint32_t det = px_ssts & 0xF;
-   // kprintf("[AHCI] DET = %u (3 = link up)\n", det);
-   // 
-   // if (px_sig == 0x00000101)
-   //  kprintf("[AHCI] ATA drive present\n");
-   // else if (px_sig == 0xEB140101)
-   //  kprintf("[AHCI] ATAPI drive present\n");
-   // else if (px_sig == 0xFFFFFFFF)
-   //  kprintf("[AHCI] no drive on port 0\n");
-   // ahci_identify(hba,  0);
    ahci_probe(bus, device, func);
    // ahci_identify()
-  }
-  if (curr_vendor == 0x1234 && device_id == 0x5678) {
-   kprintf("[PCI] mydev found at %x:%x.%x");
+  } else if (class_code == 0x01 && subclass == 0x08 && prog_if == 0x02) {
+  	kprintf("[PCI] NVMe found at %x:%x.%x\n", bus, device, func);
   }
  }
 }

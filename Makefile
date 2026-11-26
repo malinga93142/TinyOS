@@ -46,6 +46,8 @@ QEMU_COMMON := -machine pc -m $(MEM) \
                -drive file=ahci_test.img,format=raw,if=none,id=hd0 \
                -device $(QEMU_DEVICE),id=ahci \
                -device ide-hd,drive=hd0,bus=ahci.0 \
+               -drive file=nvme.img,if=none,id=nvm,format=raw \
+               -device nvme,serial=deadbeef,drive=nvm \
                -serial mon:stdio -no-reboot -no-shutdown -d int \
                -smp $(SMP) -enable-kvm -display none
 QEMU_FLAGS     := $(QEMU_COMMON) -cpu host
