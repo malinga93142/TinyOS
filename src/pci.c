@@ -36,6 +36,20 @@ uint8_t pci_read_byte(uint8_t bus, uint8_t device, uint8_t function, uint8_t off
  uint32_t dword = pci_config_read(bus, device, function, offset & 0xFC);
  return (uint8_t)((dword >> ((offset & 3) * 8)) & 0xFF);
 }
+
+// not used anywhere except in this file.
+typedef struct {
+	uint8_t class_code;
+	uint8_t subclass;
+	uint8_t prog_if;
+	uint8_t bus, device, function;
+
+	uint8_t present;
+} device_t;
+
+static device_t ahci = {0};
+static device_t nvme = {0};
+// void post_present();
 void pci_check_device(uint8_t bus, uint8_t device) {
  uint16_t vendor_id = pci_read_word(bus, device, 0, 0x00);
  if (vendor_id == 0xffff)
@@ -55,20 +69,41 @@ void pci_check_device(uint8_t bus, uint8_t device) {
   if (class_code == 0x01 && subclass == 0x06 && prog_if == 0x01) {
    // kprintf("[PCI] AHCI Found\n");
    // ahci_probe(bus, device, func);
+   ahci.class_code = 0x01; ahci.prog_if = 0x01; ahci.subclass   = 0x06;
+   ahci.bus      = bus;
+   ahci.device   = device;
+   ahci.function = func;
+   ahci.present  = 1;
   } else if (class_code == 0x01 && subclass == 0x08 && prog_if == 0x02) {
-  	kprintf("[PCI] NVMe found at %x:%x.%x\n", bus, device, func);
-   if ( nvme_probe(bus, device, func) == -1) {
-    kprintf("[PCI] nvme failed\n");
-   }
+  	// kprintf("[PCI] NVMe found at %x:%x.%x\n", bus, device, func);
+  	nvme.class_code = 0x01; nvme.subclass = 0x08; nvme.prog_if = 0x02;
+   nvme.bus     = bus;
+   nvme.device  = device;
+   nvme.function= func;
+   nvme.present = 1;
   }
  }
+ // post_present();
 }
-
+void post_present(void){
+ if (nvme.present == 1) {
+  kprintf("[PCI] NVMe found at %x:%x.%x\n", nvme.bus, nvme.device, nvme.function);
+  int ret = nvme_probe(nvme.bus, nvme.device, nvme.function);
+  if (ret == -1) {
+   kprintf("[PCI] NVMe Probe failed\n");
+  }
+ }
+ if (ahci.present == 1) {
+  kprintf("[PCI] AHCI found at %x:%x.%x\n", ahci.bus, ahci.device, ahci.function);
+  ahci_probe(ahci.bus, ahci.device, ahci.function);
+ }
+}
 void pci_enumerate_bus(void) {
  for (uint16_t bus = 0; bus < 256; bus++) {
   for (uint8_t device = 0; device < 32; device++) {
    pci_check_device((uint8_t)bus, device);
   }
  }
+ post_present();
  kprintf("[PCI] Enumeration complete.\n");
 }
