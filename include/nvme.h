@@ -56,8 +56,8 @@ _Static_assert(sizeof(nvme_cqe_t) == 0x10, "CQE MUST BE 16 BYTES");
 
 typedef struct {
  nvme_sqe_t *sq; // virt addresses of rings in RAM
- nvme_cqe_t *cq; // physical addresses, which the device uses
- uint64_t sq_pa, cq_pa;
+ nvme_cqe_t *cq; // follows top
+ uint64_t sq_pa, cq_pa;  // physical addresses, which the device uses
  volatile uint32_t *sq_db, *cq_db; // doorbell registers
  uint16_t qid, size, sq_tail, cq_head;
  uint8_t phase;
